@@ -12,8 +12,9 @@ import (
 )
 
 type config struct {
-	ProjectID string `env:"GCP_PROJECT_ID"`
-	TopicID   string `env:"GCP_TOPIC_ID"`
+	ProjectID string `env:"GCP_PROJECT_ID,required"`
+	TopicID   string `env:"GCP_TOPIC_ID,required"`
+	SubID     string `env:"GCP_SUB_ID,required"`
 }
 
 var (
@@ -52,7 +53,7 @@ func Test_publish(t *testing.T) {
 		wantErr bool
 	}{
 		{
-			name: "publish",
+			name: "success",
 			args: args{
 				client:  client,
 				topicID: cfg.TopicID,
@@ -66,6 +67,33 @@ func Test_publish(t *testing.T) {
 			_, err := publish(tt.args.client, tt.args.topicID, tt.args.msg)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("publish() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func Test_pullMsgs(t *testing.T) {
+	type args struct {
+		client *pubsub.Client
+		subID  string
+	}
+	tests := []struct {
+		name    string
+		args    args
+		wantErr bool
+	}{
+		{
+			name: "success",
+			args: args{
+				client: client,
+				subID:  cfg.SubID,
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if err := pullMsgs(tt.args.client, tt.args.subID); (err != nil) != tt.wantErr {
+				t.Errorf("pullMsgs() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})
 	}
