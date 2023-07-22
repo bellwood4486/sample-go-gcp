@@ -1,22 +1,15 @@
 package topic
 
 import (
-	"cloud.google.com/go/pubsub"
 	"context"
 	"fmt"
 	"log"
+
+	"cloud.google.com/go/pubsub"
 )
 
-func publish(projectID, topicID, msg string) (string, error) {
+func publish(client *pubsub.Client, topicID, msg string) (string, error) {
 	ctx := context.Background()
-	client, err := pubsub.NewClient(ctx, projectID)
-	if err != nil {
-		return "", fmt.Errorf("pubsub: NewClient: %w", err)
-	}
-	defer func(client *pubsub.Client) {
-		_ = client.Close()
-	}(client)
-
 	t := client.Topic(topicID)
 	result := t.Publish(ctx, &pubsub.Message{
 		Data: []byte(msg),
