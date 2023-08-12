@@ -17,7 +17,6 @@ func main() {
 	log.Print("starting server...")
 	http.HandleFunc("/", handler)
 	http.HandleFunc("/du", diskusage)
-	http.HandleFunc("/empty", emptyFile)
 	http.HandleFunc("/dummy", statsDummyFile)
 	http.HandleFunc("/dummy:add", addDummyFile)
 
@@ -76,38 +75,6 @@ func diskusage(w http.ResponseWriter, r *http.Request) {
 		_, _ = fmt.Fprintf(w, "failed to call Statfs at path: %v", err)
 		return
 	}
-}
-
-func emptyFile(w http.ResponseWriter, r *http.Request) {
-	sizeInByte := int64(300 * MB)
-	var msg string
-
-	if fileExists("/tmp/empty") {
-		msg += "before: file exits\n"
-	} else {
-		msg += "before: file not exists\n"
-	}
-
-	f, err := os.Create("/tmp/empty")
-	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		_, _ = fmt.Fprintf(w, "failed to create empty file: %v", err)
-		return
-	}
-	if err := f.Truncate(sizeInByte); err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		_, _ = fmt.Fprintf(w, "failed to truncate empty file: %v", err)
-		return
-	}
-	msg += fmt.Sprintf("truncated empty file: size=%s\n", strFileSize(uint64(sizeInByte)))
-
-	if fileExists("/tmp/empty") {
-		msg += "after: file exits\n"
-	} else {
-		msg += "after: file not exists\n"
-	}
-
-	_, _ = fmt.Fprintf(w, msg)
 }
 
 const dummyDir = "/tmp/dummy"
