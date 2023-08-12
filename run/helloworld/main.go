@@ -14,6 +14,7 @@ func main() {
 	log.Print("starting server...")
 	http.HandleFunc("/", handler)
 	http.HandleFunc("/du", diskusage)
+	http.HandleFunc("/empty", truncateEmptyFile)
 
 	port := os.Getenv("PORT")
 	if port == "" {
@@ -42,27 +43,27 @@ const (
 	GB = 1024 * MB
 )
 
+func strFileSize(sizeInByte uint64) string {
+	switch {
+	case sizeInByte >= GB:
+		return fmt.Sprintf("%.2fGB", float64(sizeInByte)/float64(GB))
+	case sizeInByte >= MB:
+		return fmt.Sprintf("%.2fMB", float64(sizeInByte)/float64(MB))
+	case sizeInByte >= KB:
+		return fmt.Sprintf("%.2fKB", float64(sizeInByte)/float64(KB))
+	default:
+		return fmt.Sprintf("%dB", sizeInByte)
+	}
+}
+
 func diskusage(w http.ResponseWriter, r *http.Request) {
 	usage := du.NewDiskUsage("/tmp")
 
 	m := make(map[string]any)
-	setSize := func(key string, sizeInByte uint64) {
-		switch {
-		case sizeInByte > GB:
-			m[key] = fmt.Sprintf("%.2fGB", float64(sizeInByte)/float64(GB))
-		case sizeInByte > MB:
-			m[key] = fmt.Sprintf("%.2fMB", float64(sizeInByte)/float64(MB))
-		case sizeInByte > KB:
-			m[key] = fmt.Sprintf("%.2fKB", float64(sizeInByte)/float64(KB))
-		default:
-			m[key] = fmt.Sprintf("%dB", sizeInByte)
-		}
-	}
-	setSize("size", usage.Size())
-	setSize("used", usage.Used())
-	setSize("available", usage.Available())
-	setSize("free", usage.Free())
-	setSize("usage", uint64(usage.Usage()))
+	m["size"] = strFileSize(usage.Size())
+	m["used"] = strFileSize(usage.Used())
+	m["available"] = strFileSize(usage.Available())
+	m["free"] = strFileSize(usage.Free())
 
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(m); err != nil {
@@ -70,4 +71,20 @@ func diskusage(w http.ResponseWriter, r *http.Request) {
 		_, _ = fmt.Fprintf(w, "failed to call Statfs at path: %v", err)
 		return
 	}
+}
+
+func truncateEmptyFile(w http.ResponseWriter, r *http.Request) {
+	sizeInByte := int64(1 * MB)
+	f, err := os.Create("/tmp/empty")
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		_, _ = fmt.Fprintf(w, "failed to create empty file: %v", err)
+		return
+	}
+	if err := f.Truncate(sizeInByte); err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		_, _ = fmt.Fprintf(w, "failed to truncate empty file: %v", err)
+		return
+	}
+	_, _ = fmt.Fprintf(w, "truncated empty file: size=%s", strFileSize(uint64(sizeInByte)))
 }
