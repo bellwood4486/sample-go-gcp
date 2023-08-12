@@ -18,8 +18,8 @@ func main() {
 	http.HandleFunc("/", handler)
 	http.HandleFunc("/du", diskusage)
 	http.HandleFunc("/empty", emptyFile)
-	http.HandleFunc("/dummy", dummyFile)
-	http.HandleFunc("/stat", dummyStat)
+	http.HandleFunc("/dummy", statsDummyFile)
+	http.HandleFunc("/dummy:add", addDummyFile)
 
 	port := os.Getenv("PORT")
 	if port == "" {
@@ -112,7 +112,7 @@ func emptyFile(w http.ResponseWriter, r *http.Request) {
 
 const dummyDir = "/tmp/dummy"
 
-func dummyFile(w http.ResponseWriter, r *http.Request) {
+func addDummyFile(w http.ResponseWriter, r *http.Request) {
 	const sizeLimitInMB = 512
 
 	sizeInMB := getSize(r)
@@ -134,22 +134,22 @@ func dummyFile(w http.ResponseWriter, r *http.Request) {
 	s, err := statDummyFiles(dummyDir)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
-		_, _ = fmt.Fprintf(w, "failed to count dummy file: %v", err)
+		_, _ = fmt.Fprintf(w, "failed to get stats: %v", err)
 		return
 	}
 
-	_, _ = fmt.Fprintf(w, "dummy files count: %d, total size: %s\n", s.count, strFileSize(uint64(s.totalSize)))
+	_, _ = fmt.Fprintf(w, "dummy files: %v\n", s)
 }
 
-func dummyStat(w http.ResponseWriter, r *http.Request) {
+func statsDummyFile(w http.ResponseWriter, r *http.Request) {
 	s, err := statDummyFiles(dummyDir)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
-		_, _ = fmt.Fprintf(w, "failed to count dummy file: %v", err)
+		_, _ = fmt.Fprintf(w, "failed to get stats: %v", err)
 		return
 	}
 
-	_, _ = fmt.Fprintf(w, "dummy files count: %d, total size: %s\n", s.count, strFileSize(uint64(s.totalSize)))
+	_, _ = fmt.Fprintf(w, "dummy files: %v\n", s)
 }
 
 func getSize(r *http.Request) int {
@@ -166,6 +166,11 @@ func getSize(r *http.Request) int {
 func fileExists(filename string) bool {
 	_, err := os.Stat(filename)
 	return err == nil
+}
+
+func dirExists(dirname string) bool {
+	s, err := os.Stat(dirname)
+	return err == nil && s.IsDir()
 }
 
 const dummyFilePrefix = "dummy"
@@ -198,7 +203,18 @@ type dummyFilesStat struct {
 	totalSize int64
 }
 
+func (s *dummyFilesStat) String() string {
+	return fmt.Sprintf("count: %d, total size: %s", s.count, strFileSize(uint64(s.totalSize)))
+}
+
 func statDummyFiles(dir string) (*dummyFilesStat, error) {
+	if !dirExists(dir) {
+		return &dummyFilesStat{
+			count:     0,
+			totalSize: 0,
+		}, nil
+	}
+
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		return nil, err
