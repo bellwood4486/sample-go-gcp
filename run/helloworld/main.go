@@ -1,14 +1,19 @@
 package main
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
 	"os"
+	"os/signal"
 	"strconv"
 	"strings"
+	"syscall"
+	"time"
 
 	"github.com/ricochet2200/go-disk-usage/du"
 )
@@ -25,11 +30,35 @@ func main() {
 		port = "8080"
 		log.Printf("defauting to port %s", port)
 	}
-
-	log.Printf("listening on port %s", port)
-	if err := http.ListenAndServe(":"+port, nil); err != nil {
-		log.Fatal(err)
+	srv := &http.Server{
+		Addr: ":" + port,
 	}
+
+	// see: https://cloud.google.com/run/docs/samples/cloudrun-sigterm-handler?hl=ja
+	var signalChan = make(chan os.Signal, 1)
+	// SIGINT handles Ctrl+C locally.
+	// SIGTERM handles Cloud Run termination signal.
+	signal.Notify(signalChan, syscall.SIGINT, syscall.SIGTERM)
+
+	go func() {
+		log.Printf("listening on port %s", port)
+		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			log.Fatal(err)
+		}
+	}()
+
+	// Receive output from signalChan.
+	sig := <-signalChan
+	log.Printf("%s signal caught", sig)
+
+	// Timeout if waiting for connections to return idle.
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	// Gracefully shutdown the server by waiting on existing requests (except websockets).
+	if err := srv.Shutdown(ctx); err != nil {
+		log.Printf("server shutdown failed: %+v", err)
+	}
+	log.Print("server exited")
 }
 
 func handler(w http.ResponseWriter, r *http.Request) {
@@ -125,6 +154,7 @@ func getSize(r *http.Request) int {
 	strSize := r.URL.Query().Get("size")
 	s, err := strconv.Atoi(strSize)
 	if err != nil {
+		log.Printf("failed to parse size: %v", err)
 		return fallbackSize
 	}
 	return s
