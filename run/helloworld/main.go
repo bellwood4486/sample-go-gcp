@@ -19,6 +19,7 @@ func main() {
 	http.HandleFunc("/du", diskusage)
 	http.HandleFunc("/empty", emptyFile)
 	http.HandleFunc("/dummy", dummyFile)
+	http.HandleFunc("/stat", dummyStat)
 
 	port := os.Getenv("PORT")
 	if port == "" {
@@ -109,27 +110,39 @@ func emptyFile(w http.ResponseWriter, r *http.Request) {
 	_, _ = fmt.Fprintf(w, msg)
 }
 
+const dummyDir = "/tmp/dummy"
+
 func dummyFile(w http.ResponseWriter, r *http.Request) {
-	const sizeLimit = 512
-	const dir = "/tmp/dummy"
+	const sizeLimitInMB = 512
 
 	sizeInMB := getSize(r)
-	if sizeInMB > sizeLimit {
+	if sizeInMB > sizeLimitInMB {
 		w.WriteHeader(http.StatusBadRequest)
-		_, _ = fmt.Fprintf(w, "dummy size limit(%dMB) exceeded: %dMB", sizeLimit, sizeInMB)
+		_, _ = fmt.Fprintf(w, "dummy size limit(%dMB) exceeded: %dMB", sizeLimitInMB, sizeInMB)
 		return
 	}
 
-	if err := os.MkdirAll(dir, 0750); err != nil {
+	if err := os.MkdirAll(dummyDir, 0750); err != nil {
 		log.Fatal(err)
 	}
-	if err := createDummyFile(dir, sizeInMB); err != nil {
+	if err := createDummyFile(dummyDir, sizeInMB); err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		_, _ = fmt.Fprintf(w, "failed to create dummy file: %v", err)
 		return
 	}
 
-	s, err := statDummyFiles(dir)
+	s, err := statDummyFiles(dummyDir)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		_, _ = fmt.Fprintf(w, "failed to count dummy file: %v", err)
+		return
+	}
+
+	_, _ = fmt.Fprintf(w, "dummy files count: %d, total size: %s\n", s.count, strFileSize(uint64(s.totalSize)))
+}
+
+func dummyStat(w http.ResponseWriter, r *http.Request) {
+	s, err := statDummyFiles(dummyDir)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		_, _ = fmt.Fprintf(w, "failed to count dummy file: %v", err)
@@ -140,12 +153,12 @@ func dummyFile(w http.ResponseWriter, r *http.Request) {
 }
 
 func getSize(r *http.Request) int {
-	const defaultSize = 5
+	const fallbackSize = 1
 
 	strSize := r.URL.Query().Get("size")
 	s, err := strconv.Atoi(strSize)
 	if err != nil {
-		return defaultSize
+		return fallbackSize
 	}
 	return s
 }
