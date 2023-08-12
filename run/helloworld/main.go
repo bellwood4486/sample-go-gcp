@@ -39,6 +39,7 @@ const (
 	B  = 1
 	KB = 1024 * B
 	MB = 1024 * KB
+	GB = 1024 * MB
 )
 
 func diskusage(w http.ResponseWriter, r *http.Request) {
@@ -46,12 +47,21 @@ func diskusage(w http.ResponseWriter, r *http.Request) {
 
 	m := make(map[string]any)
 	setSize := func(key string, sizeInByte uint64) {
-		m[key] = float64(sizeInByte) / float64(MB)
+		switch {
+		case sizeInByte > GB:
+			m[key] = fmt.Sprintf("%.2fGB", float64(sizeInByte)/float64(GB))
+		case sizeInByte > MB:
+			m[key] = fmt.Sprintf("%.2fMB", float64(sizeInByte)/float64(MB))
+		case sizeInByte > KB:
+			m[key] = fmt.Sprintf("%.2fKB", float64(sizeInByte)/float64(KB))
+		default:
+			m[key] = fmt.Sprintf("%dB", sizeInByte)
+		}
 	}
-	setSize("available", usage.Available())
-	setSize("free", usage.Free())
 	setSize("size", usage.Size())
 	setSize("used", usage.Used())
+	setSize("available", usage.Available())
+	setSize("free", usage.Free())
 	setSize("usage", uint64(usage.Usage()))
 
 	w.Header().Set("Content-Type", "application/json")
