@@ -12,5 +12,5 @@ $ gcloud config set project <project-id>
 ## Deploy
 
 ```shell
-$ gcloud run deploy --memory=128Mi --max-instances=1 --source .
+$ make deploy
 ```
