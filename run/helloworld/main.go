@@ -14,8 +14,6 @@ import (
 	"strings"
 	"syscall"
 	"time"
-
-	"github.com/ricochet2200/go-disk-usage/du"
 )
 
 func main() {
@@ -90,13 +88,18 @@ func strFileSize(sizeInByte uint64) string {
 }
 
 func diskusage(w http.ResponseWriter, r *http.Request) {
-	usage := du.NewDiskUsage("/tmp")
+	usage, err := newDiskUsage("/tmp")
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		_, _ = fmt.Fprintf(w, "failed to get disk usage at path: %v", err)
+		return
+	}
 
 	m := make(map[string]any)
-	m["size"] = strFileSize(usage.Size())
-	m["used"] = strFileSize(usage.Used())
-	m["available"] = strFileSize(usage.Available())
-	m["free"] = strFileSize(usage.Free())
+	m["size"] = strFileSize(usage.size())
+	m["free"] = strFileSize(usage.free())
+	m["available"] = strFileSize(usage.avail())
+	m["used"] = strFileSize(usage.used())
 
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(m); err != nil {
